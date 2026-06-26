@@ -151,12 +151,7 @@ function cancelBookingById(id) {
     remove(ref(database, `clients/${id}`))
         .then(() => {
             alert(
-                `Nous comprenons que des imprévus peuvent survenir. Votre réservation a été annulée avec succès. 
-   
-Lorsque vous disposerez de plus de temps, nous serons ravis de vous accueillir à nouveau dans notre salon.
-N'hésitez pas à réserver un nouveau créneau quand cela vous conviendra.
-    
-Merci pour votre confiance et à très bientôt. 😊`
+                ` Nous comprenons que des imprévus peuvent survenir. La réservation pour votre compagnon a été annulée avec succès. Lorsque vous disposerez de plus de temps, nous serons ravis de vous accueillir à nouveau, vous et votre animal. N'hésitez pas à réserver un nouveau créneau quand cela vous conviendra.  Merci pour votre confiance et à très bientôt. 🐾😊`
             );
 
             searchMyBookings();
@@ -227,359 +222,173 @@ window.loadAvailableTimeSlots = loadAvailableTimeSlots;
 
 
 function loadAvailableTimeSlots() {
+    const tableBody = document.getElementById('available-slots-table-body');
+    const tableWrapper = document.getElementById('table-wrapper');
+    const msg = document.getElementById('slots-loading-message');
+    const select = document.getElementById('select-service');
+    const dateInput = document.getElementById('appointment-date');
+    const bookingForm = document.getElementById('booking-form-section');
 
-    const tableBody =
-        document.getElementById(
-            'available-slots-table-body'
-        );
+    if (!tableBody || !tableWrapper || !msg || !select || !dateInput) return;
 
-    const tableWrapper =
-        document.getElementById(
-            'table-wrapper'
-        );
-
-    const msg =
-        document.getElementById(
-            'slots-loading-message'
-        );
-
-    const select =
-        document.getElementById(
-            'select-service'
-        );
-
-    const dateInput =
-        document.getElementById(
-            'appointment-date'
-        );
-
-    const bookingForm =
-        document.getElementById(
-            'booking-form-section'
-        );
-
-    if (
-        !tableBody ||
-        !tableWrapper ||
-        !msg ||
-        !select ||
-        !dateInput
-    ) {
-        return;
-    }
-
+    // Réinitialisation complète de l'affichage
     tableBody.innerHTML = '';
     tableWrapper.style.display = 'none';
-
-    if (bookingForm) {
-        bookingForm.classList.add('hidden');
-    }
-
+    if (bookingForm) bookingForm.classList.add('hidden');
     selectedTimeSlotMinutes = null;
 
-    if (
-        !select.value ||
-        !dateInput.value
-    ) {
-
-        msg.innerText =
-            "Sélectionnez un service et une date valide.";
-
+    // Validation des entrées de l'utilisateur
+    if (!select.value || !dateInput.value) {
+        msg.innerText = "Sélectionnez un service et une date valide.";
         msg.style.display = 'block';
-
         return;
     }
 
-    const service =
-        services.find(
-            s => s.id == select.value
-        );
-
+    const service = services.find(s => s.id == select.value);
     if (!service) return;
 
-    const salonLimits =
-        getSalonLimits();
+    // Correction du bug de fuseau horaire lors de l'extraction du jour de la semaine
+    const [year, month, day] = dateInput.value.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day); 
 
-    const pauseLimits =
-        getPauseAndClosureLimits();
-
-    const dateISO =
-        dateInput.value;
-
-    const targetDate =
-        new Date(dateISO);
-
-    if (
-        pauseLimits.closedDays.includes(
-            targetDate.getDay()
-        )
-    ) {
-        // TRADUCTION : Message de fermeture du salon
+    const pauseLimits = getPauseAndClosureLimits();
+    if (pauseLimits.closedDays.includes(targetDate.getDay())) {
         msg.textContent = "Désolé, nous sommes fermés aujourd'hui.";
         msg.style.display = 'block';
         return;
     }
 
-    const now =
-        new Date();
+    const salonLimits = getSalonLimits();
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const currentMinutes = (now.getHours() * 60) + now.getMinutes();
+    const isToday = (dateInput.value === todayStr);
 
-    const todayStr =
-        `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    let hasAnyAvailableSlot = false;
+    const fragment = document.createDocumentFragment(); // Gain de performance DOM
 
-    const currentMinutes =
-        (now.getHours() * 60) +
-        now.getMinutes();
-
-    let hasAny = false;
+    // CONFIGURATION DU PAS GLISSANT : Avancer de 5 en 5 minutes pour coller au plus près des fins de services
+    const TIME_STEP = 5; 
 
     for (
         let startMin = salonLimits.open;
         startMin <= salonLimits.close - service.duration;
-        startMin += service.duration
+        startMin += TIME_STEP // <-- C'est ce pas glissant qui supprime les minutes perdues !
     ) {
+        const endMin = startMin + service.duration;
 
-        const endMin =
-            startMin + service.duration;
-
-        // Hors horaires salon
-
-        if (
-            endMin >
-            salonLimits.close
-        ) {
+        // Éviter de déborder des horaires de fermeture globale du salon
+        if (endMin > salonLimits.close) {
             continue;
         }
 
-        // Pause déjeuner
-
-        const overlapPause =
-            (
-                startMin >= pauseLimits.start &&
-                startMin < pauseLimits.end
-            )
-            ||
-            (
-                endMin > pauseLimits.start &&
-                endMin <= pauseLimits.end
-            )
-            ||
-            (
-                startMin <= pauseLimits.start &&
-                endMin >= pauseLimits.end
-            );
-
+        // Vérification stricte de la pause déjeuner
+        const overlapPause = (startMin < pauseLimits.end && endMin > pauseLimits.start);
         if (overlapPause) {
             continue;
         }
 
-        let availableEmployees =
-            [];
+        // CORRECTION LOGIQUE : Trouver les employés disponibles du début À la fin sans coupure
+        let availableEmployees = [];
+        let firstMinute = true;
+        let slotAvailable = true;
 
-        let slotAvailable =
-            true;
-
-        for (
-            let minute = startMin;
-            minute < endMin;
-            minute++
-        ) {
-
-            const freeEmployees =
-                getAvailableEmployeesAtMinute(
-                    minute,
-                    dateISO,
-                    service.id
-                );
-
-            if (
-                freeEmployees.length === 0
-            ) {
-
+        for (let minute = startMin; minute < endMin; minute++) {
+            const freeEmployees = getAvailableEmployeesAtMinute(minute, dateInput.value, service.id);
+            
+            if (!freeEmployees || freeEmployees.length === 0) {
                 slotAvailable = false;
-
                 break;
             }
 
-            if (
-                minute === startMin
-            ) {
-
-                availableEmployees =
-                    freeEmployees;
+            if (firstMinute) {
+                availableEmployees = freeEmployees;
+                firstMinute = false;
+            } else {
+                // Règle d'intersection : l'employé doit rester le même sur toute la durée du soin
+                availableEmployees = availableEmployees.filter(emp => freeEmployees.includes(emp));
+                if (availableEmployees.length === 0) {
+                    slotAvailable = false;
+                    break;
+                }
             }
         }
 
-        let isPastSlot = false;
+        // Définir si le créneau est dans le passé (pour le jour même)
+        const isPastSlot = isToday && startMin <= currentMinutes;
+        const row = document.createElement('tr');
+        const startStr = minutesToHHMM(startMin);
+        const endStr = minutesToHHMM(endMin);
 
-        if (
-            dateISO === todayStr &&
-            startMin <= currentMinutes
-        ) {
-            isPastSlot = true;
-        }
-        
-        const row =
-            document.createElement('tr');
+        if (slotAvailable && !isPastSlot) {
+            hasAnyAvailableSlot = true;
+            
+            row.innerHTML = `
+                <td class="time-range">${startStr} - ${endStr}</td>
+                <td><span class="status-badge status-available">Disponible</span></td>
+                <td class="action-cell"></td>
+            `;
 
-        const startStr =
-            minutesToHHMM(startMin);
+            const btn = document.createElement('button');
+            btn.className = "btn btn-secondary btn-select-slot";
+            btn.innerText = "Choisir ce créneau";
+            btn.dataset.start = startMin;
 
-        const endStr =
-            minutesToHHMM(endMin);
-
-        if (
-            slotAvailable &&
-            !isPastSlot
-        ) {
-
-            const btn =
-                document.createElement(
-                    'button'
-                );
-
-            btn.className =
-                "btn btn-secondary btn-select-slot";
-
-            // TRADUCTION : Texte du bouton de sélection
-            btn.innerText =
-                "Choisir ce créneau";
-
-            btn.dataset.start =
-                startMin;
-
-            btn.onclick =
-                function(e) {
-
+            btn.onclick = function(e) {
                 e.preventDefault();
+                // Nettoyer les anciennes sélections visuelles
+                tableBody.querySelectorAll('tr').forEach(r => r.style.backgroundColor = '');
+                
+                row.style.backgroundColor = '#fff9e6';
+                selectedTimeSlotMinutes = Number(this.dataset.start);
 
-                document
-                .querySelectorAll(
-                    '#available-slots-table-body tr'
-                )
-                .forEach(
-                    r => r.style.backgroundColor = ''
-                );
-
-                row.style.backgroundColor =
-                    '#fff9e6';
-
-                selectedTimeSlotMinutes =
-                    Number(
-                        this.dataset.start
-                    );
-
-                document
-                .getElementById(
-                    'client-selected-hour'
-                )
-                .value =
-                    startStr;
+                const hourInput = document.getElementById('client-selected-hour');
+                if (hourInput) hourInput.value = startStr;
 
                 if (bookingForm) {
-
-                    bookingForm.classList.remove(
-                        'hidden'
-                    );
-
-                    bookingForm.scrollIntoView({
-                        behavior:'smooth'
-                    });
+                    bookingForm.classList.remove('hidden');
+                    bookingForm.scrollIntoView({ behavior: 'smooth' });
                 }
             };
 
-            // TRADUCTION : Badge de statut disponible
-            row.innerHTML = `
-                <td class="time-range">
-                    ${startStr} - ${endStr}
-                </td>
+            const staffInfo = document.createElement('span');
+            staffInfo.className = "staff-count";
+            staffInfo.innerText = ` (${availableEmployees.length} place libre(s))`;
 
-                <td>
-                    <span class="status-badge status-available">
-                        Disponible
-                    </span>
-                </td>
-
-                <td></td>
-            `;
-
-            row.children[2]
-                .appendChild(btn);
-
-            const staffInfo =
-                document.createElement(
-                    'span'
-                );
-
-            staffInfo.className =
-                "staff-count";
-
-            staffInfo.innerText =
-                `(${availableEmployees.length} place libre(s))`;
-
-            row.children[2]
-                .appendChild(staffInfo);
-
-            hasAny = true;
-
+            const actionCell = row.querySelector('.action-cell');
+            actionCell.appendChild(btn);
+            actionCell.appendChild(staffInfo);
+            
+            fragment.appendChild(row);
         } else {
-
-            // TRADUCTION : Badge de statut indisponible / occupé
+            // OPTIONNEL : Si vous voulez masquer les créneaux occupés/passés pour ne pas encombrer l'écran 
+            // avec le pas de 5 minutes, vous pouvez décommenter le bloc ci-dessous.
+            /*
             row.innerHTML = `
-                <td
-                    class="time-range"
-                    style="
-                        color:#999;
-                        text-decoration:line-through;
-                    "
-                >
-                    ${startStr} - ${endStr}
-                </td>
-
-                <td>
-                    <span class="status-badge status-busy">
-                        Déjà réservé 😊
-                    </span>
-                </td>
-
-                <td>
-                    <span
-                        style="
-                            color:#c81e1e;
-                            font-size:13px;
-                        "
-                    >
-                        ${
-                            isPastSlot
-                            ? "Horaire passé"
-                            : "Occupé"
-                        }
-                    </span>
-                </td>
+                <td class="time-range" style="color:#999; text-decoration:line-through;">${startStr} - ${endStr}</td>
+                <td><span class="status-badge status-busy">Déjà réservé 😊</span></td>
+                <td><span style="color:#c81e1e; font-size:13px;">${isPastSlot ? "Horaire passé" : "Occupé"}</span></td>
             `;
+            fragment.appendChild(row);
+            */
         }
-
-        tableBody.appendChild(row);
     }
 
-    if (!hasAny) {
+    // Injection en une seule fois dans le DOM pour optimiser les performances
+    tableBody.appendChild(fragment);
 
-        // TRADUCTION : Message aucun créneau restant
-        msg.innerText =
-            "Il n'y a plus de créneau disponible pour aujourd'hui 😊 Veuillez choisir une autre date.";
-
-        msg.style.display =
-            'block';
-
+    // Message dynamique ajusté selon la date sélectionnée
+    if (!hasAnyAvailableSlot) {
+        msg.innerText = isToday 
+            ? "Il n'y a plus de créneau disponible pour aujourd'hui 😊 Veuillez choisir une autre date."
+            : "Aucun créneau disponible pour cette date. Veuillez en sélectionner une autre.";
+        msg.style.display = 'block';
         return;
     }
 
-    msg.style.display =
-        'none';
-
-    tableWrapper.style.display =
-        'block';
+    msg.style.display = 'none';
+    tableWrapper.style.display = 'block';
 }
-
 
 function isEmployeeAvailable(emp, dateISO, startMin, endMin) {
     return !clients.some(c =>
