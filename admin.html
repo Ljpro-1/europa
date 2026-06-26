@@ -29,20 +29,20 @@
         <div class="grid">
             <!-- 1. PARAMÈTRES DU PROPRIÉTAIRE -->
             <section class="card">
-                <h2>1.heure et jour d'ouverture</h2>
-                <p class="subtitle">modifiable à tous moment</p>
+                <h2>1.Horaires et jours d'ouverture</h2>
+                <p class="subtitle">modifiables à tous moment</p>
                 
                 <div class="form-group">
-                    <label for="salon-days">Jour d'ouverture</label>
+                    <label for="salon-days">Jours d'ouverture</label>
                     <input type="text" id="salon-days" value="Lundi au Samedi">
                 </div>
                 <div class="form-group">
-                    <label for="salon-hours">Heure d'ouveture
+                    <label for="salon-hours">Heures d'ouveture
              </label>
                     <input type="text" id="salon-hours" value="09:00 - 19:00">
                 </div>
                 <div class="form-group">
-                    <label for="salon-break">Jour et heure de pause</label>
+                    <label for="salon-break">Jour et heure de la pause déjeuner</label>
                     <input type="text" id="salon-break" value="Dimanche (Fermé), Pause midi : 12:30 - 13:30">
                 </div>
                 <button class="btn btn-primary" onclick="alert('Configuration des horaires sauvegardée !')">Enregistrer les Horaires</button>
@@ -50,19 +50,19 @@
 
             <!-- 2. GESTION DES SERVICES -->
             <section class="card">
-                <h2>2. Les services disponibles</h2>
+                <h2>2. Les prestations disponibles</h2>
                 <div class="form-group input-spacing">
-                    <input type="text" id="service-name" placeholder="Nom (ex: Coiffure Homme)">
+                    <input type="text" id="service-name" placeholder="Nom (ex: bain & tonte- chien moyen)">
                 </div>
                 <div class="form-group">
-                    <label for="service-duration"> Delai du service pour chaque client (minutes)</label>
+                    <label for="service-duration"> Durée de la prestation (minutes)</label>
                     <!-- CORRECTION : Saisie manuelle de la durée -->
                     <input type="number" id="service-duration" placeholder="Écrivez la durée (ex: 35)" min="1">
                 </div>
                 
-                <button class="btn btn-primary" onclick="addService()">Ajouter Service</button>
+                <button class="btn btn-primary" onclick="addService()">Ajouter la prestation</button>
 
-                <h3>Liste des services</h3>
+                <h3>Liste des prestations</h3>
                 <div id="services-list" class="list-container"></div>
             </section>
             
@@ -79,12 +79,12 @@
     <div class="form-group">
         <label>
             <input type="checkbox" id="employee-polyvalent">
-            Employé polyvalent (savoir faire tous les services)
+            Employé polyvalent (savoir faire tous les prestations)
         </label>
     </div>
 
     <div class="form-group">
-        <label> Service maîtrisé:</label>
+        <label> prestation maîtrisé:</label>
         <div id="employee-services-list"></div>
     </div>
 
